@@ -1,0 +1,29 @@
+{
+  "name": "blepresencemonitor",
+  "version": "1.0.0",
+  "description": "Detects when a BLE-enabled device has arrived and left the scanning radius",
+  "main": "server.js",
+  "scripts": {
+    "test": "jest --watch",
+    "start": "node src/server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jhfoo/blepresencemonitor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jhfoo/blepresencemonitor/issues"
+  },
+  "dependencies": {
+    "log4js": "^2.3.10",
+    "moment": "^2.19.1",
+    "noble": "^1.8.1"
+  },
+  "homepage": "https://github.com/jhfoo/blepresencemonitor#readme",
+  "devDependencies": {
+    "jest": "^21.2.1"
+  }
+}
