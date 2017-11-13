@@ -2,20 +2,23 @@ const noble = require('noble'),
     log4js = require('log4js'),
     logger = log4js.getLogger(),
     moment = require('moment'),
-    PeripheralTracker = require('./lib/PeripheralTracker');
+    PeripheralTracker = require('./lib/PeripheralTracker'),
+    lru = require('./lib/lru'),
+    config = require('./conf/config');
 
+log4js.configure(config.log4js);
 logger.level = 'debug';
+
+var LruPeripherals = new lru();
 
 noble.on('stateChange', (data) => {
     console.log('Event:stateChange ' + data);
 
     if (data === 'poweredOn') {
-        noble.startScanning([], true, (err, service) => {
+        noble.startScanning([], true, (err) => {
             //        noble.startScanning(['adabfb006e7d4601bda2bffaa68956ba'], true, (err, service) => {
             if (err) {
                 console.log('Error: %s', err);
-            } else {
-                console.log('Service: %s', service);
             }
         });
     }
@@ -31,7 +34,9 @@ noble.on('discover', (peri) => {
         id: peri.id,
         name: peri.advertisement.localName
     });
+
     if (LastIntervalSec === -1) {
+        // first msg received from peripheral
         logger.info('Event:discover ' + peri);
 
         console.log('peri discovered (' + peri.id +
@@ -59,10 +64,20 @@ noble.on('discover', (peri) => {
             console.log('\t\t' + peri.advertisement.txPowerLevel);
         }
     } else {
-        logger.info('Event:discover %s', JSON.stringify({
+        // recurring msg received from peripheral
+        var uuids = peri.advertisement.serviceUuids;
+        var item = {
             id: peri.id,
+            uuids: uuids ? uuids : [],
             LastAdvertisedSec: LastIntervalSec,
-            localName: peri.advertisement.localName
-        }, null, 2));
-    }
+            localName: peri.advertisement.localName ? peri.advertisement.localName : 'Unknown Peripheral'
+        };
+
+        logger.info('Event:discover %s', JSON.stringify(item, null, 2));
+        var count = LruPeripherals.insertOrRenewItem(item, 'id');
+        logger.debug('Oldest peripheral: %s', LruPeripherals.getOldestItem().localName);
+        logger.debug('Aged peripherals: %s', LruPeripherals.getItemsByAge().map((item) => {
+            return item.localName + ' (' + item.id + ')';
+        }).join(','));
+    };
 });

@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "test": "jest --watch",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "dev": "supervisor -n exit src/server.js"
   },
   "repository": {
     "type": "git",
@@ -24,6 +25,7 @@
   },
   "homepage": "https://github.com/jhfoo/blepresencemonitor#readme",
   "devDependencies": {
-    "jest": "^21.2.1"
+    "jest": "^21.2.1",
+    "supervisor": "^0.12.0"
   }
 }
