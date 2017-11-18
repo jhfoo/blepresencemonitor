@@ -7,21 +7,26 @@ const log4js = require('log4js'),
 
 class Lru {
     constructor() {
-        this.nodes = {
-            dummy: {
-                id: ID_DUMMY_NODE,
-                data: null,
-                NewerNode: null,
-                OlderNode: null,
-                ExpireBy: null
-            }
-        };
-        // initialize linked list with a dummy node
-        this.LatestNode = this.nodes.dummy;
-        this.LatestNode.PrevNode = this.nodes.dummy;
-        this.LatestNode.NextNode = this.nodes.dummy;
+        this.clearHashNLinkedList();
         this.timer = null;
-        this.TimeoutSec = 5;
+        this.IsTimerActive = true;
+        this._TimeoutSec = Lru.DEFAULT_TIMEOUTSEC();
+    }
+    static DEFAULT_TIMEOUTSEC() {
+        return 5;
+    }
+    activateTimer(IsActive) {
+        // active timers really call setTimeout()
+        if (this.timer != null) 
+            this.clearTimer();
+        this.IsTimerActive = IsActive;
+    }
+    TimeoutSec(NewTimeoutSec) {
+        if (NewTimeoutSec) {
+            // set
+            this._TimeoutSec = NewTimeoutSec;
+        }
+        return this._TimeoutSec;
     }
     insertOrRenewItem(item, key) {
         var PrevOldestNode = this.OldestNode;
@@ -38,11 +43,7 @@ class Lru {
         logger.debug('Newest node: %s', this.LatestNode.data[key]);
         if (IsResetTimer) {
             // oldest node is refreshed: reset timeout
-            if (this.timer != null) {
-                // reset timeout
-                clearTimeout(this.timer);
-                this.timer = null;
-            }
+            this.clearTimer();
             this.startExpiryTimer();
         }
         return Object.keys(this.nodes).length;
@@ -58,7 +59,7 @@ class Lru {
         ThisNode.data = item;
 
         // reset timeout for node
-        ThisNode.ExpireBy = moment().add(this.TimeoutSec, 's');
+        ThisNode.ExpireBy = moment().add(this._TimeoutSec, 's');
 
         // skip if node is already latest
         if (ThisNode != this.LatestNode) {
@@ -92,7 +93,7 @@ class Lru {
             id: item[key],
             NewerNode: null,
             OlderNode: null,
-            ExpireBy: moment().add(this.TimeoutSec, 's')
+            ExpireBy: moment().add(this._TimeoutSec, 's')
         };
 
         // update node hash
@@ -120,23 +121,29 @@ class Lru {
             return;
         }
 
-        logger.debug('Setting timer %d sec', this.TimeoutSec);
+        // proceed is timer active
+        if (!this.IsTimerActive)
+            return;
+
+        logger.debug('Setting timer %d sec', this._TimeoutSec);
         var self = this;
         this.timer = setTimeout(() => {
             logger.info('At least 1 node has expired');
             this.timer = null;
-            self.removeExpiredNodes();
-        }, this.TimeoutSec * 1000);
+            self.removeExpiredItems();
+        }, this._TimeoutSec * 1000);
     }
     popOldestItem(key) {
 
     }
     getOldestNode() {
-        var ret = this.LatestNode.PrevNode.PrevNode 
-        return ret === ID_DUMMY_NODE ? null : ret;
+        // skip past the null end node
+        var ret = this.LatestNode.PrevNode.PrevNode;
+        return ret.id === ID_DUMMY_NODE ? null : ret;
     }
-    getOldestItem(key) {
-        return this.OldestNode.data;
+    getOldestItem() {
+        var ret = this.getOldestNode();
+        return ret === null ? null : ret.data;
     }
     getItemsByAge(IsNewestFirst) {
         IsNewestFirst = typeof IsNewestFirst === 'undefined' ? true : IsNewestFirst;
@@ -159,16 +166,46 @@ class Lru {
             return item.id;
         });
     }
-    removeExpiredNodes() {
+    clearTimer() {
+        // stop the timer
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+    }
+    clearHashNLinkedList() {
+        this.nodes = {
+            dummy: {
+                id: ID_DUMMY_NODE,
+                data: null,
+                NewerNode: null,
+                OlderNode: null,
+                ExpireBy: null
+            }
+        };
+        // initialize linked list with a dummy node
+        this.LatestNode = this.nodes.dummy;
+        this.LatestNode.PrevNode = this.nodes.dummy;
+        this.LatestNode.NextNode = this.nodes.dummy;
+    }
+    clearAll() {
+        this.clearTimer();
+        this.clearHashNLinkedList();
+    }
+    removeExpiredItems() {
+        var ret = [];
         var OldestNode = this.getOldestNode();
         if (OldestNode === null)
             // empty list: exit
-            return [];
+            return ret;
 
-        while (OldestNode.ExpireBy.diff(moment(), 'seconds') <= 0 &&
-            OldestNode.id != ID_DUMMY_NODE) {
+        // non-empty list
+        while (OldestNode.id != ID_DUMMY_NODE &&
+            OldestNode.ExpireBy.diff(moment(), 'seconds') <= 0) {
             // remove oldest node
             logger.info('Node id %s expired by %d secs', OldestNode.data.id, moment().diff(OldestNode.ExpireBy, 'seconds'));
+            // remember node removed
+            ret.push(OldestNode.data);
             // remove from hash
             delete this.nodes[OldestNode.id];
             // remove from linked list
@@ -178,18 +215,18 @@ class Lru {
             OldestNode = OldestNode.PrevNode;
         }
 
-        if (OldestNode === null) {
-            // empty list
-            this.LatestNode = null;
+        if (OldestNode.id === ID_DUMMY_NODE) {
+            // empty list: point LatestNode to dummy node
+            this.LatestNode = OldestNode;
         } else {
-            // remove from linked list
-            this.OldestNode.NextNode = null;
+            // non-empty list: start timer
             this.startExpiryTimer();
         }
 
         logger.debug('Aged peripherals: %s', this.getItemsByAge().map((item) => {
             return item.localName + ' (' + item.id + ')';
         }).join(','));
+        return ret;
     }
 }
 

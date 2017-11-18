@@ -3,6 +3,13 @@
 const Lru = require('../src/lib/lru'),
     lru = new Lru();
 
+describe('empty queue', () => {
+    test('getOldestNode(): null', () => {
+        expect(lru.getOldestNode()).toBe(null);
+    });
+
+});
+
 describe('insert 1 item', () => {
     test('insertNode(): 1st insert', () => {
         expect(lru.insertNode({
@@ -18,7 +25,6 @@ describe('insert 1 item', () => {
     test('getItemIdsByAge(false): 1000', () => {
         expect(lru.getItemIdsByAge(false)).toEqual(['1000']);
     });
-
 });
 
 describe('insert 2 items', () => {
@@ -78,5 +84,98 @@ describe('renew oldest item', () => {
 
     test('getItemIdsByAge(false): 2000, 1000', () => {
         expect(lru.getItemIdsByAge(false)).toEqual(['2000', '1000']);
+    });
+});
+
+describe('removeExpiredItems()', () => {
+    test('empty list: []', () => {
+        lru.clearAll();
+        expect(lru.removeExpiredItems()).toEqual([]);
+    });
+
+    test('1 in queue, 1 expired item: [1000]', (done) => {
+        lru.clearAll();
+        lru.activateTimer(false);
+        lru.insertOrRenewItem({
+            id: '1000'
+        }, 'id');
+        setTimeout(() => {
+            try {
+                expect(lru.removeExpiredItems().map((item) => {
+                    return item.id;
+                })).toEqual(['1000']);
+                done();
+            } catch (err) {
+                done.fail(err);
+            }
+        }, 4 * 1000);
+    });
+
+    test('2 in queue, 1 expired item: [1000]', (done) => {
+        lru.clearAll();
+        lru.activateTimer(false);
+        lru.insertOrRenewItem({
+            id: '1000'
+        }, 'id');
+        // add another item 2sec later
+        setTimeout(() => {
+            lru.insertOrRenewItem({
+                id: '2000'
+            }, 'id');
+            // check expired items 2sec later
+            setTimeout(() => {
+                try {
+                    expect(lru.removeExpiredItems().map((item) => {
+                        return item.id;
+                    })).toEqual(['1000']);
+                    done();
+                } catch (err) {
+                    done.fail(err);
+                }
+            }, 2 * 1000);
+        }, 2 * 1000);
+    });
+
+    test('2 in queue, 2 expired item: [1000,2000]', (done) => {
+        lru.clearAll();
+        lru.activateTimer(false);
+        lru.insertOrRenewItem({
+            id: '1000'
+        }, 'id');
+        jasmine.DEFAULT_TIMEOUT_INTERVAL = 10000;
+        // add another item 1sec later
+        setTimeout(() => {
+            lru.insertOrRenewItem({
+                id: '2000'
+            }, 'id');
+            // check expired items 2sec later
+            setTimeout(() => {
+                try {
+                    expect(lru.removeExpiredItems().map((item) => {
+                        return item.id;
+                    })).toEqual(['1000','2000']);
+                    done();
+                } catch (err) {
+                    done.fail(err);
+                }
+            }, 4 * 1000);
+        }, 1 * 1000);
+    });
+
+});
+
+describe('misc', () => {
+    test('TimeoutSec(): GET', () => {
+        expect(lru.TimeoutSec()).toBe(Lru.DEFAULT_TIMEOUTSEC());
+    });
+
+    test('TimeoutSec(): SET', () => {
+        expect(lru.TimeoutSec(5)).toBe(5);
+    });
+
+    test('clearAll(): empty list', () => {
+        lru.clearAll();
+        expect(lru.getItemIdsByAge()).toEqual([]);
+        expect(lru.getOldestNode()).toBe(null);
     });
 });
