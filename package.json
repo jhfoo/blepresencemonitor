@@ -6,7 +6,8 @@
   "scripts": {
     "test": "jest --watch",
     "start": "node src/server.js",
-    "dev": "supervisor -n exit src/server.js"
+    "dev": "supervisor -n exit -w src src/server.js",
+    "prod": "node src/server.js"
   },
   "repository": {
     "type": "git",
@@ -21,7 +22,10 @@
   "dependencies": {
     "log4js": "^2.3.10",
     "moment": "^2.19.1",
-    "noble": "^1.8.1"
+    "noble": "^1.8.1",
+    "restify": "^7.7.0",
+    "restify-cors-middleware": "^1.1.1",
+    "restify-router": "^0.5.1"
   },
   "homepage": "https://github.com/jhfoo/blepresencemonitor#readme",
   "devDependencies": {

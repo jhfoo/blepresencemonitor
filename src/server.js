@@ -1,83 +1,62 @@
-const noble = require('noble'),
+const restify = require('restify'),
     log4js = require('log4js'),
     logger = log4js.getLogger(),
-    moment = require('moment'),
-    PeripheralTracker = require('./lib/PeripheralTracker'),
-    lru = require('./lib/lru'),
-    config = require('./conf/config');
+    config = require('./conf/config'),
+    BleManager = require('./BleManager');
 
 log4js.configure(config.log4js);
 logger.level = 'debug';
 
-var LruPeripherals = new lru();
+const BleMgr = new BleManager();
 
-noble.on('stateChange', (data) => {
-    console.log('Event:stateChange ' + data);
-
-    if (data === 'poweredOn') {
-        noble.startScanning([], true, (err) => {
-            //        noble.startScanning(['adabfb006e7d4601bda2bffaa68956ba'], true, (err, service) => {
-            if (err) {
-                console.log('Error: %s', err);
-            }
-        });
-    }
+const server = restify.createServer();
+server.get('/svc/stop', (req, res, next) => {
+    logger.info('Stopping service');
+    BleMgr.stopScanning();
+    res.send({
+        status: 'OK'
+    });
+    next();
+    server.close(() => {
+        logger.info('Stopped service');
+        // need this to force process termination as Noble has no feature to stop monitoring
+        process.exit(0);
+    });
 });
 
-noble.on('discover', (peri) => {
-    if (peri.advertisement.serviceUuids.indexOf('adabfb006e7d4601bda2bffaa68956ba') === -1 &&
-        peri.advertisement.localName != 'Tile')
-        return;
-    // console.log('%s: %s', peri.advertisement.localName, peri.advertisement.serviceUuids[0] );
+server.get('/ble/start', (req, res, next) => {
+    BleMgr.startScanning()
+        .then(() => {
+            res.send({
+                status: 'OK'
+            });
+            next();
+        })
+        .catch((err) => {
+            logger.error(err);
+            res.send({
+                status: 'ERROR',
+                message: err
+            });
+            next();
+        });
+});
 
-    var LastIntervalSec = PeripheralTracker.registerPing({
-        id: peri.id,
-        name: peri.advertisement.localName
+server.get('/ble/stop', (req, res, next) => {
+    BleMgr.stopScanning();
+    res.send({
+        status: 'OK'
     });
+});
 
-    if (LastIntervalSec === -1) {
-        // first msg received from peripheral
-        logger.info('Event:discover ' + peri);
+server.get('/ble/state', (req, res, next) => {
+    BleMgr.getState();
+    res.send({
+        status: 'OK',
+        data: BleMgr.getState()
+    });
+});
 
-        console.log('peri discovered (' + peri.id +
-            ' with address <' + peri.address + ', ' + peri.addressType + '>,' +
-            ' connectable ' + peri.connectable + ',' +
-            ' RSSI ' + peri.rssi + ':');
-        console.log('\thello my local name is:');
-        console.log('\t\t' + peri.advertisement.localName);
-        console.log('\tcan I interest you in any of the following advertised services:');
-        console.log('\t\t' + JSON.stringify(peri.advertisement.serviceUuids));
-
-        var serviceData = peri.advertisement.serviceData;
-        if (serviceData && serviceData.length) {
-            console.log('\there is my service data:');
-            for (var i in serviceData) {
-                console.log('\t\t' + JSON.stringify(serviceData[i].uuid) + ': ' + JSON.stringify(serviceData[i].data.toString('hex')));
-            }
-        }
-        if (peri.advertisement.manufacturerData) {
-            console.log('\there is my manufacturer data:');
-            console.log('\t\t' + JSON.stringify(peri.advertisement.manufacturerData.toString('hex')));
-        }
-        if (peri.advertisement.txPowerLevel !== undefined) {
-            console.log('\tmy TX power level is:');
-            console.log('\t\t' + peri.advertisement.txPowerLevel);
-        }
-    } else {
-        // recurring msg received from peripheral
-        var uuids = peri.advertisement.serviceUuids;
-        var item = {
-            id: peri.id,
-            uuids: uuids ? uuids : [],
-            LastAdvertisedSec: LastIntervalSec,
-            localName: peri.advertisement.localName ? peri.advertisement.localName : 'Unknown Peripheral'
-        };
-
-        logger.info('Event:discover %s', JSON.stringify(item, null, 2));
-        var count = LruPeripherals.insertOrRenewItem(item, 'id');
-        logger.debug('Oldest peripheral: %s', LruPeripherals.getOldestItem().localName);
-        logger.debug('Aged peripherals: %s', LruPeripherals.getItemsByAge().map((item) => {
-            return item.localName + ' (' + item.id + ')';
-        }).join(','));
-    };
+server.listen(config.service.port, () => {
+    logger.info('%s listening at %s', server.name, server.url);
 });

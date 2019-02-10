@@ -1,6 +1,9 @@
 'use strict';
 
 module.exports = {
+    service: {
+        port: 8081
+    },
     log4js: {
         appenders: {
             console: {
