@@ -3,6 +3,7 @@ const noble = require('noble'),
     log4js = require('log4js'),
     logger = log4js.getLogger(),
     moment = require('moment'),
+    dayjs = require('dayjs'),
     PeripheralTracker = require('./lib/PeripheralTracker'),
     lru = require('./lib/lru');
 
@@ -10,6 +11,9 @@ var LruPeripherals = new lru();
 
 class BleManager {
     constructor() {
+        this.peripherals = {
+            TrackedPeripheralId: ''
+        };
         this.isScanning = false;
         let self = this;
 
@@ -28,8 +32,23 @@ class BleManager {
         });
 
         noble.on('discover', (peri) => {
-            if (peri.advertisement.serviceUuids.indexOf('adabfb006e7d4601bda2bffaa68956ba') === -1 &&
-                peri.advertisement.localName != 'Tile')
+            // console.log('************* DISCOVER ****************')
+            // console.log(peri);
+            this.peripherals[peri.id] = {
+                DateTimeUpdated: dayjs(),
+                data: {
+                    id: peri.id,
+                    uuid: peri.uuid,
+                    advertisement: {
+                        ServiceUuids: peri.advertisement.serviceUuids,
+                        manufacturerId: peri.advertisement.manufacturerData ? peri.advertisement.manufacturerData.toString('hex') : '',
+                        localName: peri.advertisement.localName ? peri.advertisement.localName : '' 
+                    },
+                    rssi: peri.rssi,
+                    address: peri.address
+                }
+            };
+            if (peri.id != this.TrackedPeripheralId)
                 return;
             // console.log('%s: %s', peri.advertisement.localName, peri.advertisement.serviceUuids[0] );
 
@@ -84,6 +103,12 @@ class BleManager {
                 }).join(','));
             };
         });
+    }
+    TrackedPeripheral(PeriId) {
+        this.TrackedPeripheralId = PeriId;
+    }
+    getPeripherals() {
+        return this.peripherals;
     }
     getState() {
         return {
