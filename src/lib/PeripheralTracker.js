@@ -2,7 +2,7 @@
 
 const log4js = require('log4js'),
     logger = log4js.getLogger(),
-    moment = require('moment');
+    dayjs = require('dayjs');
 
 var peripherals = {};
 
@@ -13,10 +13,10 @@ module.exports = {
         if (!peripherals[device.id]) {
             peripherals[device.id] = device;
         } else {
-            LastPingIntervalSec = moment().diff(peripherals[device.id].DateTimeLastPing,'seconds')    
+            LastPingIntervalSec = dayjs().diff(peripherals[device.id].DateTimeLastPing,'seconds')    
         }
 
-        peripherals[device.id].DateTimeLastPing = moment();
+        peripherals[device.id].DateTimeLastPing = dayjs();
 
         return LastPingIntervalSec;
     }

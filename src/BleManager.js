@@ -2,7 +2,6 @@
 const noble = require('noble'),
     log4js = require('log4js'),
     logger = log4js.getLogger(),
-    moment = require('moment'),
     dayjs = require('dayjs'),
     PeripheralTracker = require('./lib/PeripheralTracker'),
     lru = require('./lib/lru');
@@ -11,9 +10,8 @@ var LruPeripherals = new lru();
 
 class BleManager {
     constructor() {
-        this.peripherals = {
-            TrackedPeripheralId: ''
-        };
+        this.TrackedPeripheralId = '';
+        this.peripherals = {};
         this.isScanning = false;
         let self = this;
 
@@ -42,10 +40,13 @@ class BleManager {
                     advertisement: {
                         ServiceUuids: peri.advertisement.serviceUuids,
                         manufacturerId: peri.advertisement.manufacturerData ? peri.advertisement.manufacturerData.toString('hex') : '',
+                        TxPowerLevel: peri.advertisement.txPowerLevel ? peri.advertisement.txPowerLevel : '',
                         localName: peri.advertisement.localName ? peri.advertisement.localName : '' 
                     },
                     rssi: peri.rssi,
-                    address: peri.address
+                    connectable: peri.connectable,
+                    address: peri.address,
+                    AddressType: peri.addressType
                 }
             };
             if (peri.id != this.TrackedPeripheralId)
@@ -61,30 +62,13 @@ class BleManager {
                 // first msg received from peripheral
                 logger.info('Event:discover ' + peri);
 
-                console.log('peri discovered (' + peri.id +
-                    ' with address <' + peri.address + ', ' + peri.addressType + '>,' +
-                    ' connectable ' + peri.connectable + ',' +
-                    ' RSSI ' + peri.rssi + ':');
-                console.log('\thello my local name is:');
-                console.log('\t\t' + peri.advertisement.localName);
-                console.log('\tcan I interest you in any of the following advertised services:');
-                console.log('\t\t' + JSON.stringify(peri.advertisement.serviceUuids));
-
                 var serviceData = peri.advertisement.serviceData;
-                if (serviceData && serviceData.length) {
-                    console.log('\there is my service data:');
-                    for (var i in serviceData) {
-                        console.log('\t\t' + JSON.stringify(serviceData[i].uuid) + ': ' + JSON.stringify(serviceData[i].data.toString('hex')));
-                    }
-                }
-                if (peri.advertisement.manufacturerData) {
-                    console.log('\there is my manufacturer data:');
-                    console.log('\t\t' + JSON.stringify(peri.advertisement.manufacturerData.toString('hex')));
-                }
-                if (peri.advertisement.txPowerLevel !== undefined) {
-                    console.log('\tmy TX power level is:');
-                    console.log('\t\t' + peri.advertisement.txPowerLevel);
-                }
+                // if (serviceData && serviceData.length) {
+                //     console.log('\there is my service data:');
+                //     for (var i in serviceData) {
+                //         console.log('\t\t' + JSON.stringify(serviceData[i].uuid) + ': ' + JSON.stringify(serviceData[i].data.toString('hex')));
+                //     }
+                // }
             } else {
                 // recurring msg received from peripheral
                 var uuids = peri.advertisement.serviceUuids;
@@ -104,7 +88,7 @@ class BleManager {
             };
         });
     }
-    TrackedPeripheral(PeriId) {
+    trackPeripheral(PeriId) {
         this.TrackedPeripheralId = PeriId;
     }
     getPeripherals() {
@@ -113,7 +97,8 @@ class BleManager {
     getState() {
         return {
             state: noble.state,
-            isScanning: this.isScanning
+            isScanning: this.isScanning,
+            TrackedPeripheralId: this.TrackedPeripheralId
         };
     }
     startScanning() {
